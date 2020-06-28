@@ -1,4 +1,6 @@
-const puppeteer = require("puppeteer");
+const puppeteer = require("puppeteer-core");
+const chromium = require("chrome-aws-lambda");
+
 require("dotenv").config();
 const exec = require("child_process").exec;
 
@@ -7,9 +9,12 @@ const slackNotification = (message) => {
     `curl -X POST -H 'Content-type: application/json' --data '{"text":"${message}"}' ${process.env.HOOK_URL}`
   );
 };
-
-(async () => {
-  const browser = await puppeteer.launch();
+exports.handler = async (event, context, callback) => {
+  let result = null;
+  const browser = await puppeteer.launch({
+    executablePath: await chromium.executablePath,
+    headless: true,
+  });
   const page = await browser.newPage();
   const username = process.env.USERNAME;
   const password = process.env.PASSWORD;
@@ -52,11 +57,19 @@ const slackNotification = (message) => {
     await page.click("#G05_RETURNED_FULL_TIME0");
     await page.click(".cui-button-primary");
     await page.waitFor(3000);
-    await page.click(".cui-button-primary");
-    await page.waitFor(3000);
+    // await page.click(".cui-button-primary");
+    // await page.waitFor(3000);
+    result = await page.title();
     slackNotification("Claim Complete");
     await browser.close();
   } catch (error) {
     slackNotification(`Failure:\n${error}`);
+    return callback(error);
+  } finally {
+    if (browser !== null) {
+      await browser.close();
+    }
   }
-})();
+
+  return callback(null, result);
+};
